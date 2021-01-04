@@ -223,7 +223,7 @@ const std::vector<std::string> getBasicAccountingCommands(const bool useBpf) {
     const std::vector<std::string> ipt_basic_accounting_commands = {
             "*filter",
 
-            "-A bw_INPUT -j bw_global_alert",
+            "-A bw_INPUT -j bw_global_alert", "-A bw_INPUT -j bw_penalty_box",
             // Prevents IPSec double counting (ESP and UDP-encap-ESP respectively)
             "-A bw_INPUT -p esp -j RETURN",
             StringPrintf("-A bw_INPUT -m mark --mark 0x%x/0x%x -j RETURN", uidBillingMask,
@@ -231,14 +231,14 @@ const std::vector<std::string> getBasicAccountingCommands(const bool useBpf) {
             useBpf ? "" : "-A bw_INPUT -m owner --socket-exists",
             StringPrintf("-A bw_INPUT -j MARK --or-mark 0x%x", uidBillingMask),
 
-            "-A bw_OUTPUT -j bw_global_alert",
+            "-A bw_OUTPUT -j bw_global_alert", "-A bw_OUTPUT -j bw_penalty_box",
             // Prevents IPSec double counting (Tunnel mode and Transport mode,
             // respectively)
             "-A bw_OUTPUT -o " IPSEC_IFACE_PREFIX "+ -j RETURN",
             "-A bw_OUTPUT -m policy --pol ipsec --dir out -j RETURN",
             useBpf ? "" : "-A bw_OUTPUT -m owner --socket-exists",
 
-            "-A bw_costly_shared --jump bw_penalty_box",
+            "-A bw_FORWARD -j bw_penalty_box",
             useBpf ? BPF_PENALTY_BOX_MATCH_BLACKLIST_COMMAND : "",
             "-A bw_penalty_box --jump bw_happy_box", "-A bw_happy_box --jump bw_data_saver",
             "-A bw_data_saver -j RETURN",
@@ -642,7 +642,6 @@ int BandwidthController::setInterfaceQuota(const std::string& iface, int64_t max
     std::vector<std::string> cmds = {
         "*filter",
         StringPrintf(":%s -", chain.c_str()),
-        StringPrintf("-A %s -j bw_penalty_box", chain.c_str()),
         StringPrintf("-I bw_INPUT %d -i %s --jump %s", ruleInsertPos, iface.c_str(),
                      chain.c_str()),
         StringPrintf("-I bw_OUTPUT %d -o %s --jump %s", ruleInsertPos, iface.c_str(),
